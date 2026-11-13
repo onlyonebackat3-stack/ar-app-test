@@ -7,24 +7,28 @@
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; background: transparent; }
     #ui-overlay {
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       z-index: 10; background: rgba(0, 0, 0, 0.7); color: white;
       padding: 10px 20px; border-radius: 20px; font-family: sans-serif;
       font-size: 14px; pointer-events: none; text-align: center;
     }
-    /* 화면 중앙에 고정되는 투명 비디오 (트래킹 영향 안 받음) */
+    /* 화면 중앙에 고정되는 비디오 컨테이너 */
     #ar-video-container {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       width: 250px; height: 250px;
       z-index: 5; display: none;
       pointer-events: auto;
+      cursor: pointer;
     }
+    /* 두 개의 비디오를 겹쳐서 대기시킴 (깜빡임 방지 핵심) */
     #ar-video-container video {
+      position: absolute; top: 0; left: 0;
       width: 100%; height: 100%; object-fit: contain;
       background: transparent;
+      display: none; /* 평상시엔 숨김 */
     }
     #capture-btn {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -32,89 +36,13 @@
       padding: 15px 30px; border-radius: 30px; font-size: 16px;
       font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
+    #capture-btn:active { background: #ff6b81; transform: translateX(-50%) scale(0.95); }
   </style>
 </head>
 <body>
   <div id="ui-overlay">제품을 비추어 인식을 완료한 뒤,<br>화면에 나타난 캐릭터를 터치해 보세요!</div>
   
+  <!-- 두 비디오를 미리 로드해 두고 스위칭합니다 -->
   <div id="ar-video-container">
-    <video id="char-video" src="./character.webm" loop muted playsinline></video>
-  </div>
-
-  <button id="capture-btn">📸 화면 캡처하기</button>
-
-  <a-scene 
-    id="ar-scene"
-    mindar-image="imageTargetSrc: ./target.mind;" 
-    color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
-    vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-    <a-camera position="0 0 0" look-controls="enabled: false" raycaster="objects: none"></a-camera>
-    <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
-  </a-scene>
-
-  <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      const sceneEl = document.querySelector('#ar-scene');
-      const arTarget = document.querySelector('#ar-target');
-      const videoContainer = document.querySelector('#ar-video-container');
-      const charVideo = document.querySelector('#char-video');
-      const sound = new Audio('./sound.mp3');
-      const captureBtn = document.querySelector('#capture-btn');
-
-      let isLocked = false;
-      let isInteracting = false;
-
-      // 1. 제품이 인식되는 순간 딱 한 번 실행
-      arTarget.addEventListener('targetFound', () => {
-        if (!isLocked) {
-          isLocked = true;
-          
-          // 핵심: 인식되는 순간 MindAR 시스템을 정지시켜 트래킹을 완전히 끊어버림
-          if (sceneEl.systems['mindar-image-system']) {
-            sceneEl.systems['mindar-image-system'].stop();
-          }
-
-          // 캐릭터 비디오를 화면 중앙에 띄우고 재생
-          videoContainer.style.display = 'block';
-          charVideo.play().catch(e => console.log("자동재생 제한:", e));
-          
-          document.querySelector('#ui-overlay').style.display = 'none'; // 안내 문구 숨김
-        }
-      });
-
-      // 2. 캐릭터 터치 시 (터치 비디오 및 효과음 재생)
-      charVideo.addEventListener('click', () => {
-        if (isInteracting || !isLocked) return;
-        isInteracting = true;
-
-        charVideo.src = './character-touch.webm';
-        charVideo.play();
-
-        sound.currentTime = 0;
-        sound.play().catch(e => console.log("사운드 제한:", e));
-
-        setTimeout(() => {
-          charVideo.src = './character.webm';
-          charVideo.play();
-          isInteracting = false;
-        }, 3000);
-      });
-
-      // 3. 캡처 기능
-      captureBtn.addEventListener('click', () => {
-        sceneEl.renderer.preserveDrawingBuffer = true;
-        setTimeout(() => {
-          const canvas = sceneEl.renderer.domElement;
-          const imageURL = canvas.toDataURL('image/png');
-          const downloadLink = document.createElement('a');
-          downloadLink.href = imageURL;
-          downloadLink.download = 'AR_Capture.png';
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
-        }, 100);
-      });
-    });
-  </script>
-</body>
-</html>
+    <video id="char-video-idle" src="./character.webm" loop muted playsinline></video>
+    <video id="char-video-touch" src="./character-touch.webm" muted
