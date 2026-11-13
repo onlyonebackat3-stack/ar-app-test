@@ -22,31 +22,129 @@
       font-family: sans-serif;
       font-size: 14px;
       pointer-events: none;
+      text-align: center;
+    }
+    /* 캡처 버튼 디자인 */
+    #capture-btn {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: #ff4757;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    #capture-btn:active {
+      background: #ff6b81;
+      transform: translateX(-50%) scale(0.95);
     }
   </style>
 </head>
 <body>
   <!-- 화면 안내 문구 -->
-  <div id="ui-overlay">제품 사진을 비추고 캐릭터를 터치해 보세요!</div>
+  <div id="ui-overlay">제품을 비추어 인식을 완료한 뒤,<br>화면을 움직여 자리를 잡고 캐릭터를 터치해 보세요!</div>
 
-  <!-- AR 카메라 및 타겟 설정 -->
+  <!-- 캡처 버튼 -->
+  <button id="capture-btn">📸 화면 캡처하기</button>
+
+  <!-- AR 카메라 및 타겟 설정 (missTolerance를 주어 화면을 벗어나도 유지되도록 설정) -->
   <a-scene 
-    mindar-image="imageTargetSrc: ./target.mind;" 
+    mindar-image="imageTargetSrc: ./target.mind; missTolerance: 30;" 
     color-space="sRGB" 
     renderer="colorManagement: true, physicallyCorrectLights" 
     vr-mode-ui="enabled: false" 
     device-orientation-permission-ui="enabled: false">
     
     <a-assets>
-      <!-- 기본 캐릭터 GIF, 터치 시 바뀔 캐릭터 GIF, 그리고 효과음 로드 -->
-      <img id="char-img" src="./character.gif">
-      <img id="char-touch-img" src="./character-touch.gif">
+      <!-- GIF 및 효과음 로드 -->
+      <img id="char-img" src="./character.gif" crossorigin="anonymous">
+      <img id="char-touch-img" src="./character-touch.gif" crossorigin="anonymous">
       <audio id="char-sound" src="./sound.mp3" preload="auto"></audio>
     </a-assets>
 
-    <!-- 스마트폰 터치를 인식하기 위한 레이캐스터(cursor)가 포함된 카메라 -->
+    <!-- 스마트폰 터치를 인식하는 카메라 -->
     <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="objects: .clickable"></a-camera>
 
-    <!-- 제품이 인식되면 보일 캐릭터 설정 -->
+    <!-- 제품이 인식되면 나타나는 AR 타겟 영역 -->
     <a-entity mindar-image-target="targetIndex: 0">
       <a-plane id="char-plane" class="clickable" src="#char-img" position="0 0 0" height="1" width="1" rotation="0 0 0" transparent="true"></a-plane>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const charPlane = document.querySelector('#char-plane');
+      const sound = document.querySelector('#char-sound');
+      const captureBtn = document.querySelector('#capture-btn');
+      const targetEntity = document.querySelector('[mindar-image-target]');
+
+      let isInteracting = false;
+      let isTargetFound = false;
+
+      // 1. 타겟이 인식되었을 때
+      targetEntity.addEventListener('targetFound', () => {
+        isTargetFound = true;
+      });
+
+      // 2. 캐릭터 터치 시 상호작용 (GIF 변경 및 사운드 재생)
+      charPlane.addEventListener('click', () => {
+        if (isInteracting) return;
+        isInteracting = true;
+
+        // 터치 모션 GIF로 변경
+        charPlane.setAttribute('material', 'src', '#char-touch-img');
+
+        // 사운드 재생
+        sound.currentTime = 0;
+        sound.play().catch(e => {
+          console.log("오디오 자동 재생 제한:", e);
+        });
+
+        // 사운드 길이만큼 재생 후 기본 GIF로 복구
+        const soundDuration = (sound.duration && !isNaN(sound.duration)) ? sound.duration * 1000 : 3000;
+        setTimeout(() => {
+          charPlane.setAttribute('material', 'src', '#char-img');
+          isInteracting = false;
+        }, soundDuration);
+      });
+
+      // 3. 캡처 버튼 기능 (화면 스크린샷 저장)
+      captureBtn.addEventListener('click', () => {
+        const videoElement = document.querySelector('video');
+        const canvasElement = document.querySelector('a-scene').componentEl.renderer.domElement;
+
+        if (!videoElement) {
+          alert("카메라 화면을 찾을 수 없습니다.");
+          return;
+        }
+
+        // 캡처를 위한 가상 캔버스 생성
+        const captureCanvas = document.createElement('canvas');
+        captureCanvas.width = canvasElement.width;
+        captureCanvas.height = canvasElement.height;
+        const ctx = captureCanvas.getContext('2d');
+
+        // 카메라 영상과 3D AR 그래픽을 합성하여 캡처
+        ctx.drawImage(videoElement, 0, 0, captureCanvas.width, captureCanvas.height);
+        ctx.drawImage(canvasElement, 0, 0, captureCanvas.width, captureCanvas.height);
+
+        // 이미지 파일로 다운로드 링크 생성
+        const imageURL = captureCanvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = imageURL;
+        downloadLink.download = 'AR_Capture.png';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+      });
+    });
+  </script>
+</body>
+</html>
