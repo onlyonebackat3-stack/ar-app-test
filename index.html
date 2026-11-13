@@ -11,11 +11,8 @@
       margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
     }
     
-    /* MindAR이 생성하는 카메라 비디오가 검정 화면으로 묻히지 않도록 강제 배치 */
+    /* MindAR 기본 스캐닝 UI 숨기기 */
     .mindar-ui-scanning { display: none !important; }
-    video {
-      object-fit: cover !important;
-    }
 
     #ui-overlay {
       position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -23,6 +20,7 @@
       padding: 10px 20px; border-radius: 20px; font-family: sans-serif;
       font-size: 14px; pointer-events: none; text-align: center; white-space: nowrap;
     }
+    
     #ar-video-container {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 250px; height: 250px; z-index: 15; display: none; pointer-events: auto; cursor: pointer;
@@ -52,11 +50,12 @@
 
   <button id="capture-btn">📸 화면 캡처하기</button>
 
-  <!-- MindAR 최적화 설정 -->
+  <!-- 렌더러 충돌 방지 속성(alpha, antialias) 추가 -->
   <a-scene 
     id="ar-scene"
     mindar-image="imageTargetSrc: ./target.mind; uiLoading: yes; uiError: yes; uiScanning: no;" 
     color-space="sRGB" 
+    renderer="alpha: true; antialias: true; preserveDrawingBuffer: true;"
     vr-mode-ui="enabled: false" 
     device-orientation-permission-ui="enabled: false">
     
@@ -80,32 +79,9 @@
       let isLocked = false;
       let isInteracting = false;
 
-      // 1. 제품 사진 인식 시
+      // 1. 제품 사진 인식 시 트래킹 정지 및 캐릭터 고정
       arTarget.addEventListener('targetFound', () => {
         if (isLocked) return;
         isLocked = true;
 
-        const mindarSystem = sceneEl.systems['mindar-image-system'];
-        if (mindarSystem && typeof mindarSystem.pause === 'function') {
-          mindarSystem.pause(true);
-        }
-
-        videoContainer.style.display = 'block';
-        videoIdle.play().catch(e => console.log(e));
-        videoTouch.play().catch(e => console.log(e));
-
-        uiOverlay.textContent = '캐릭터를 터치해 보세요!';
-        setTimeout(() => { uiOverlay.style.display = 'none'; }, 2000);
-      });
-
-      // 2. 터치 시
-      videoContainer.addEventListener('click', () => {
-        if (!isLocked || isInteracting) return;
-        isInteracting = true;
-
-        videoTouch.currentTime = 0;
-        videoTouch.play().catch(e => console.log(e));
-
-        videoTouch.style.opacity = '1';
-        videoTouch.style.zIndex = '2';
-        videoIdle.style.opacity = '0';
+        const mindarSystem = sceneEl.systems['mindar-image-
