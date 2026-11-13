@@ -43,4 +43,176 @@
       height: 210px;
       z-index: 999;
       display: none;
-      pointer-events
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    #ar-video-container video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: transparent;
+      transition: opacity 0.08s ease;
+    }
+    #char-video-idle { opacity: 1; z-index: 2; }
+    #char-video-touch { opacity: 0; z-index: 1; pointer-events: none; }
+
+    /* 캡처 버튼 (인식 후 확실히 노출되도록 z-index 최상위 설정) */
+    #capture-btn {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: #ff4757;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      display: none;
+    }
+    #capture-btn:active {
+      background: #ff6b81;
+      transform: translateX(-50%) scale(0.95);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="ui-overlay">제품 사진을 비추어 인식해 주세요!</div>
+
+  <div id="ar-video-container">
+    <video id="char-video-idle" src="./character.webm" loop muted playsinline crossorigin="anonymous"></video>
+    <video id="char-video-touch" src="./character-touch.webm" loop muted playsinline crossorigin="anonymous"></video>
+  </div>
+
+  <button id="capture-btn">📸 화면 캡처하기</button>
+
+  <a-scene 
+    id="ar-scene"
+    mindar-image="imageTargetSrc: ./target.mind; uiLoading: yes; uiError: yes; uiScanning: yes;" 
+    color-space="sRGB" 
+    vr-mode-ui="enabled: false" 
+    device-orientation-permission-ui="enabled: false">
+    
+    <a-camera position="0 0 0" look-controls="enabled: false" raycaster="objects: none"></a-camera>
+    <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+  </a-scene>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const sceneEl = document.querySelector('#ar-scene');
+      const arTarget = document.querySelector('#ar-target');
+      const uiOverlay = document.querySelector('#ui-overlay');
+      const videoContainer = document.querySelector('#ar-video-container');
+      const videoIdle = document.querySelector('#char-video-idle');
+      const videoTouch = document.querySelector('#char-video-touch');
+      const captureBtn = document.querySelector('#capture-btn');
+
+      const sound = new Audio('./sound.mp3');
+      sound.preload = 'auto';
+
+      let isLocked = false;
+      let isInteracting = false;
+
+      // 1. 제품 인식 순간
+      arTarget.addEventListener('targetFound', () => {
+        if (isLocked) return;
+        isLocked = true;
+
+        const mindarSystem = sceneEl.systems['mindar-image-system'];
+        if (mindarSystem && typeof mindarSystem.pause === 'function') {
+          mindarSystem.pause(true);
+        }
+
+        // 컨테이너와 캡처 버튼을 확실하게 화면에 띄움
+        videoContainer.style.display = 'block';
+        captureBtn.style.display = 'block';
+        
+        videoIdle.play().catch(e => console.log(e));
+        videoTouch.play().catch(e => console.log(e));
+
+        uiOverlay.textContent = '캐릭터를 터치해 보세요!';
+        setTimeout(() => { uiOverlay.style.display = 'none'; }, 2500);
+      });
+
+      // 2. 캐릭터 터치 시
+      videoContainer.addEventListener('click', () => {
+        if (!isLocked || isInteracting) return;
+        isInteracting = true;
+
+        videoTouch.currentTime = 0;
+        videoTouch.play().catch(e => console.log(e));
+
+        videoTouch.style.opacity = '1';
+        videoTouch.style.zIndex = '2';
+        videoIdle.style.opacity = '0';
+        videoIdle.style.zIndex = '1';
+
+        sound.currentTime = 0;
+        sound.play().catch(e => console.log(e));
+
+        const duration = (sound.duration && !isNaN(sound.duration)) ? sound.duration * 1000 : 3000;
+        setTimeout(() => {
+          videoIdle.play().catch(() => {});
+          videoIdle.style.opacity = '1';
+          videoIdle.style.zIndex = '2';
+          videoTouch.style.opacity = '0';
+          videoTouch.style.zIndex = '1';
+          isInteracting = false;
+        }, duration);
+      });
+
+      // 3. 캡처 기능
+      captureBtn.addEventListener('click', () => {
+        const videos = Array.from(document.querySelectorAll('video'));
+        const camVid = videos.find(v => v.id !== 'char-video-idle' && v.id !== 'char-video-touch');
+
+        if (!camVid || camVid.readyState < 2) {
+          alert('카메라 화면이 아직 준비되지 않았습니다.');
+          return;
+        }
+
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+
+        const scale = Math.max(w / camVid.videoWidth, h / camVid.videoHeight);
+        const dw = camVid.videoWidth * scale;
+        const dh = camVid.videoHeight * scale;
+        ctx.drawImage(camVid, (w - dw) / 2, (h - dh) / 2, dw, dh);
+
+        const activeVid = isInteracting ? videoTouch : videoIdle;
+        const rect = videoContainer.getBoundingClientRect();
+        if (activeVid && activeVid.videoWidth > 0) {
+          const r = Math.min(rect.width / activeVid.videoWidth, rect.height / activeVid.videoHeight);
+          const cw = activeVid.videoWidth * r;
+          const ch = activeVid.videoHeight * r;
+          ctx.drawImage(activeVid, rect.left + (rect.width - cw) / 2, rect.top + (rect.height - ch) / 2, cw, ch);
+        }
+
+        try {
+          const link = document.createElement('a');
+          link.href = canvas.toDataURL('image/png');
+          link.download = `AR_Capture_${Date.now()}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch (err) {
+          console.error(err);
+          alert('캡처 저장 중 오류가 발생했습니다.');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
