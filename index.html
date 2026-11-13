@@ -27,21 +27,14 @@
       pointer-events: none;
       text-align: center;
     }
-    
-    /* 
-      캐릭터 영역: 
-      - 위치: 화면 중앙 기준 아래쪽 (top 70%)
-      - 크기: 적당히 줄인 210px
-      - z-index를 높여 터치와 렌더링 최우선 보장
-    */
     #ar-video-container {
       position: fixed;
-      top: 70%;
+      top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 210px;
-      height: 210px;
-      z-index: 999;
+      width: 250px;
+      height: 250px;
+      z-index: 50;
       display: none;
       pointer-events: auto;
       cursor: pointer;
@@ -59,13 +52,13 @@
     #char-video-idle { opacity: 1; z-index: 2; }
     #char-video-touch { opacity: 0; z-index: 1; pointer-events: none; }
 
-    /* 캡처 버튼 (인식 후 확실히 노출되도록 z-index 최상위 설정) */
+    /* 캡처 버튼 스타일 */
     #capture-btn {
       position: fixed;
       bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 9999;
+      z-index: 100;
       background: #ff4757;
       color: white;
       border: none;
@@ -75,7 +68,7 @@
       font-weight: bold;
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-      display: none;
+      display: none; /* 제품 인식 전에는 숨김 */
     }
     #capture-btn:active {
       background: #ff6b81;
@@ -121,7 +114,7 @@
       let isLocked = false;
       let isInteracting = false;
 
-      // 1. 제품 인식 순간
+      // 1. 제품 인식 순간: 트래킹 정지, 캐릭터 고정, 캡처 버튼 노출
       arTarget.addEventListener('targetFound', () => {
         if (isLocked) return;
         isLocked = true;
@@ -131,9 +124,8 @@
           mindarSystem.pause(true);
         }
 
-        // 컨테이너와 캡처 버튼을 확실하게 화면에 띄움
         videoContainer.style.display = 'block';
-        captureBtn.style.display = 'block';
+        captureBtn.style.display = 'block'; // 인식 후 캡처 버튼 등장
         
         videoIdle.play().catch(e => console.log(e));
         videoTouch.play().catch(e => console.log(e));
@@ -169,7 +161,7 @@
         }, duration);
       });
 
-      // 3. 캡처 기능
+      // 3. 캡처 기능 (안정적인 실시간 카메라 + 캐릭터 합성)
       captureBtn.addEventListener('click', () => {
         const videos = Array.from(document.querySelectorAll('video'));
         const camVid = videos.find(v => v.id !== 'char-video-idle' && v.id !== 'char-video-touch');
@@ -186,11 +178,13 @@
         canvas.height = h;
         const ctx = canvas.getContext('2d');
 
+        // 배경 카메라 영상 비율 맞추어 그리기
         const scale = Math.max(w / camVid.videoWidth, h / camVid.videoHeight);
         const dw = camVid.videoWidth * scale;
         const dh = camVid.videoHeight * scale;
         ctx.drawImage(camVid, (w - dw) / 2, (h - dh) / 2, dw, dh);
 
+        // 현재 화면에 떠 있는 투명 캐릭터 비디오 합성
         const activeVid = isInteracting ? videoTouch : videoIdle;
         const rect = videoContainer.getBoundingClientRect();
         if (activeVid && activeVid.videoWidth > 0) {
@@ -200,6 +194,7 @@
           ctx.drawImage(activeVid, rect.left + (rect.width - cw) / 2, rect.top + (rect.height - ch) / 2, cw, ch);
         }
 
+        // 이미지 파일로 다운로드 실행
         try {
           const link = document.createElement('a');
           link.href = canvas.toDataURL('image/png');
