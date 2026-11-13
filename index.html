@@ -27,13 +27,19 @@
       pointer-events: none;
       text-align: center;
     }
+    
+    /* 
+      캐릭터 위치 및 크기 수정:
+      - top: 75% (화면의 3/4 지점)
+      - width / height: 210px (기존 250px 대비 약 84% 크기)
+    */
     #ar-video-container {
       position: fixed;
-      top: 50%;
+      top: 75%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 250px;
-      height: 250px;
+      width: 210px;
+      height: 210px;
       z-index: 50;
       display: none;
       pointer-events: auto;
@@ -52,7 +58,6 @@
     #char-video-idle { opacity: 1; z-index: 2; }
     #char-video-touch { opacity: 0; z-index: 1; pointer-events: none; }
 
-    /* 캡처 버튼 스타일 */
     #capture-btn {
       position: fixed;
       bottom: 30px;
@@ -68,7 +73,7 @@
       font-weight: bold;
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-      display: none; /* 제품 인식 전에는 숨김 */
+      display: none;
     }
     #capture-btn:active {
       background: #ff6b81;
@@ -125,7 +130,7 @@
         }
 
         videoContainer.style.display = 'block';
-        captureBtn.style.display = 'block'; // 인식 후 캡처 버튼 등장
+        captureBtn.style.display = 'block';
         
         videoIdle.play().catch(e => console.log(e));
         videoTouch.play().catch(e => console.log(e));
@@ -161,7 +166,7 @@
         }, duration);
       });
 
-      // 3. 캡처 기능 (안정적인 실시간 카메라 + 캐릭터 합성)
+      // 3. 캡처 기능
       captureBtn.addEventListener('click', () => {
         const videos = Array.from(document.querySelectorAll('video'));
         const camVid = videos.find(v => v.id !== 'char-video-idle' && v.id !== 'char-video-touch');
@@ -178,36 +183,11 @@
         canvas.height = h;
         const ctx = canvas.getContext('2d');
 
-        // 배경 카메라 영상 비율 맞추어 그리기
         const scale = Math.max(w / camVid.videoWidth, h / camVid.videoHeight);
         const dw = camVid.videoWidth * scale;
         const dh = camVid.videoHeight * scale;
         ctx.drawImage(camVid, (w - dw) / 2, (h - dh) / 2, dw, dh);
 
-        // 현재 화면에 떠 있는 투명 캐릭터 비디오 합성
         const activeVid = isInteracting ? videoTouch : videoIdle;
         const rect = videoContainer.getBoundingClientRect();
-        if (activeVid && activeVid.videoWidth > 0) {
-          const r = Math.min(rect.width / activeVid.videoWidth, rect.height / activeVid.videoHeight);
-          const cw = activeVid.videoWidth * r;
-          const ch = activeVid.videoHeight * r;
-          ctx.drawImage(activeVid, rect.left + (rect.width - cw) / 2, rect.top + (rect.height - ch) / 2, cw, ch);
-        }
-
-        // 이미지 파일로 다운로드 실행
-        try {
-          const link = document.createElement('a');
-          link.href = canvas.toDataURL('image/png');
-          link.download = `AR_Capture_${Date.now()}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        } catch (err) {
-          console.error(err);
-          alert('캡처 저장 중 오류가 발생했습니다.');
-        }
-      });
-    });
-  </script>
-</body>
-</html>
+        if (activeVid && activeVid.videoWidth > 0)
