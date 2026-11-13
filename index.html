@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR 과제용 프로젝트</title>
+  <!-- 3D 및 AR 라이브러리 로드 -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-family: sans-serif;
+      font-size: 14px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- 화면 안내 문구 -->
+  <div id="ui-overlay">제품 사진을 비추고 캐릭터를 터치해 보세요!</div>
+
+  <!-- AR 카메라 및 타겟 설정 -->
+  <a-scene 
+    mindar-image="imageTargetSrc: ./target.mind;" 
+    color-space="sRGB" 
+    renderer="colorManagement: true, physicallyCorrectLights" 
+    vr-mode-ui="enabled: false" 
+    device-orientation-permission-ui="enabled: false">
+    
+    <a-assets>
+      <!-- 기본 캐릭터 GIF, 터치 시 바뀔 캐릭터 GIF, 그리고 효과음 로드 -->
+      <img id="char-img" src="./character.gif">
+      <img id="char-touch-img" src="./character-touch.gif">
+      <audio id="char-sound" src="./sound.mp3" preload="auto"></audio>
+    </a-assets>
+
+    <!-- 스마트폰 터치를 인식하기 위한 레이캐스터(cursor)가 포함된 카메라 -->
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="objects: .clickable"></a-camera>
+
+    <!-- 제품이 인식되면 보일 캐릭터 설정 -->
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-plane id="char-plane" class="clickable" src="#char-img" position="0 0 0" height="1" width="1" rotation="0 0 0" transparent="true"></a-plane>
