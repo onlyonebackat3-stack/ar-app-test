@@ -14,17 +14,17 @@
       padding: 10px 20px; border-radius: 20px; font-family: sans-serif;
       font-size: 14px; pointer-events: none; text-align: center;
     }
-    /* 화면 중앙에 띄울 투명 비디오 스타일 (터치 가능) */
+    /* 화면 중앙에 고정되는 투명 비디오 (트래킹 영향 안 받음) */
     #ar-video-container {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       width: 250px; height: 250px;
-      z-index: 5; display: none; /* 초기에는 숨김 */
+      z-index: 5; display: none;
       pointer-events: auto;
     }
     #ar-video-container video {
       width: 100%; height: 100%; object-fit: contain;
-      background: transparent; /* 검은 배경 차단 */
+      background: transparent;
     }
     #capture-btn {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -37,7 +37,6 @@
 <body>
   <div id="ui-overlay">제품을 비추어 인식을 완료한 뒤,<br>화면에 나타난 캐릭터를 터치해 보세요!</div>
   
-  <!-- HTML 화면에 직접 띄우는 투명 비디오 영역 -->
   <div id="ar-video-container">
     <video id="char-video" src="./character.webm" loop muted playsinline></video>
   </div>
@@ -45,6 +44,7 @@
   <button id="capture-btn">📸 화면 캡처하기</button>
 
   <a-scene 
+    id="ar-scene"
     mindar-image="imageTargetSrc: ./target.mind;" 
     color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
     vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
@@ -54,38 +54,45 @@
 
   <script>
     window.addEventListener('DOMContentLoaded', () => {
+      const sceneEl = document.querySelector('#ar-scene');
       const arTarget = document.querySelector('#ar-target');
       const videoContainer = document.querySelector('#ar-video-container');
       const charVideo = document.querySelector('#char-video');
-      const sound = new Audio('./sound.mp3'); // 효과음 객체
+      const sound = new Audio('./sound.mp3');
       const captureBtn = document.querySelector('#capture-btn');
 
       let isLocked = false;
       let isInteracting = false;
 
-      // 1. 제품 인식 순간 위치 고정 및 비디오 등장
+      // 1. 제품이 인식되는 순간 딱 한 번 실행
       arTarget.addEventListener('targetFound', () => {
         if (!isLocked) {
           isLocked = true;
-          videoContainer.style.display = 'block'; // 비디오 화면에 표시
+          
+          // 핵심: 인식되는 순간 MindAR 시스템을 정지시켜 트래킹을 완전히 끊어버림
+          if (sceneEl.systems['mindar-image-system']) {
+            sceneEl.systems['mindar-image-system'].stop();
+          }
+
+          // 캐릭터 비디오를 화면 중앙에 띄우고 재생
+          videoContainer.style.display = 'block';
           charVideo.play().catch(e => console.log("자동재생 제한:", e));
+          
+          document.querySelector('#ui-overlay').style.display = 'none'; // 안내 문구 숨김
         }
       });
 
-      // 2. 캐릭터 터치 시 (비디오 소스 변경 및 사운드 재생)
+      // 2. 캐릭터 터치 시 (터치 비디오 및 효과음 재생)
       charVideo.addEventListener('click', () => {
         if (isInteracting || !isLocked) return;
         isInteracting = true;
 
-        // 터치용 비디오로 교체
         charVideo.src = './character-touch.webm';
         charVideo.play();
 
-        // 사운드 재생
         sound.currentTime = 0;
         sound.play().catch(e => console.log("사운드 제한:", e));
 
-        // 사운드 종료 후 원래 비디오로 복귀 (약 3초 또는 사운드 길이)
         setTimeout(() => {
           charVideo.src = './character.webm';
           charVideo.play();
@@ -95,7 +102,6 @@
 
       // 3. 캡처 기능
       captureBtn.addEventListener('click', () => {
-        const sceneEl = document.querySelector('a-scene');
         sceneEl.renderer.preserveDrawingBuffer = true;
         setTimeout(() => {
           const canvas = sceneEl.renderer.domElement;
