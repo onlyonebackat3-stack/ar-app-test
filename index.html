@@ -8,100 +8,140 @@
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: transparent;
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
     }
-
-    /* 상단 안내 문구 */
     #ui-overlay {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-family: sans-serif;
-      font-size: 14px;
-      pointer-events: none;
-      text-align: center;
-      white-space: nowrap;
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 20; background: rgba(0, 0, 0, 0.7); color: white;
+      padding: 10px 20px; border-radius: 20px; font-family: sans-serif;
+      font-size: 14px; pointer-events: none; text-align: center; white-space: nowrap;
     }
-
-    /* 화면 중앙 고정 투명 비디오 컨테이너 */
     #ar-video-container {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 280px;
-      height: 280px;
-      z-index: 15;
-      display: none;
-      pointer-events: auto;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 250px; height: 250px; z-index: 15; display: none; pointer-events: auto; cursor: pointer;
     }
-
-    /* 두 비디오를 겹쳐두고 opacity로 전환하여 깜빡임 및 검은 배경 원천 차단 */
     #ar-video-container video {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      background: transparent !important;
-      transition: opacity 0.08s ease;
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background: transparent; transition: opacity 0.08s ease;
     }
-
-    #char-video-idle {
-      opacity: 1;
-      z-index: 2;
-    }
-
-    #char-video-touch {
-      opacity: 0;
-      z-index: 1;
-      pointer-events: none;
-    }
-
-    /* 캡처 버튼 */
+    #char-video-idle { opacity: 1; z-index: 2; }
+    #char-video-touch { opacity: 0; z-index: 1; pointer-events: none; }
+    
     #capture-btn {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 25;
-      background: #ff4757;
-      color: white;
-      border: none;
-      padding: 15px 30px;
-      border-radius: 30px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      z-index: 25; background: #ff4757; color: white; border: none;
+      padding: 15px 30px; border-radius: 30px; font-size: 16px; font-weight: bold; cursor: pointer;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     }
-    #capture-btn:active {
-      background: #ff6b81;
-      transform: translateX(-50%) scale(0.95);
-    }
+    #capture-btn:active { background: #ff6b81; transform: translateX(-50%) scale(0.95); }
   </style>
 </head>
 <body>
   <div id="ui-overlay">제품 사진을 비추어 인식해 주세요!</div>
 
-  <!-- 투명 WebM 캐릭터 영역 -->
   <div id="ar-video-container">
     <video id="char-video-idle" src="./character.webm" preload="auto" loop muted playsinline crossorigin="anonymous"></video>
     <video id="char-video-touch" src="./character-touch.webm" preload="auto" loop muted playsinline crossorigin="anonymous"></video>
   </div>
 
-  <button id="capture-btn
+  <button id="capture-btn">📸 화면 캡처하기</button>
+
+  <!-- MindAR 표준 설정 (카메라가 안정적으로 켜지도록 구성) -->
+  <a-scene 
+    id="ar-scene"
+    mindar-image="imageTargetSrc: ./target.mind; uiLoading: no; uiError: yes; uiScanning: yes;" 
+    color-space="sRGB" 
+    renderer="preserveDrawingBuffer: true;" 
+    vr-mode-ui="enabled: false" 
+    device-orientation-permission-ui="enabled: false">
+    
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-entity id="ar-target" mindar-image-target="targetIndex: 0"></a-entity>
+  </a-scene>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const sceneEl = document.querySelector('#ar-scene');
+      const arTarget = document.querySelector('#ar-target');
+      const uiOverlay = document.querySelector('#ui-overlay');
+      const videoContainer = document.querySelector('#ar-video-container');
+      const videoIdle = document.querySelector('#char-video-idle');
+      const videoTouch = document.querySelector('#char-video-touch');
+      const captureBtn = document.querySelector('#capture-btn');
+
+      const sound = new Audio('./sound.mp3');
+      sound.preload = 'auto';
+
+      let isLocked = false;
+      let isInteracting = false;
+
+      // 1. 제품 사진 인식 시 트래킹 일시정지 및 캐릭터 고정
+      arTarget.addEventListener('targetFound', () => {
+        if (isLocked) return;
+        isLocked = true;
+
+        const mindarSystem = sceneEl.systems['mindar-image-system'];
+        if (mindarSystem && typeof mindarSystem.pause === 'function') {
+          mindarSystem.pause(true); // 카메라는 유지하고 인식만 정지
+        }
+
+        videoContainer.style.display = 'block';
+        videoIdle.play().catch(e => console.log(e));
+        videoTouch.play().catch(e => console.log(e));
+
+        uiOverlay.textContent = '캐릭터를 터치해 보세요!';
+        setTimeout(() => { uiOverlay.style.display = 'none'; }, 2000);
+      });
+
+      // 2. 터치 시 모션 및 사운드 전환
+      videoContainer.addEventListener('click', () => {
+        if (!isLocked || isInteracting) return;
+        isInteracting = true;
+
+        videoTouch.currentTime = 0;
+        videoTouch.play().catch(e => console.log(e));
+
+        videoTouch.style.opacity = '1';
+        videoTouch.style.zIndex = '2';
+        videoIdle.style.opacity = '0';
+        videoIdle.style.zIndex = '1';
+
+        sound.currentTime = 0;
+        sound.play().catch(e => console.log(e));
+
+        const duration = (sound.duration && !isNaN(sound.duration)) ? sound.duration * 1000 : 3000;
+        setTimeout(() => {
+          videoIdle.play().catch(() => {});
+          videoIdle.style.opacity = '1';
+          videoIdle.style.zIndex = '2';
+          videoTouch.style.opacity = '0';
+          videoTouch.style.zIndex = '1';
+          isInteracting = false;
+        }, duration);
+      });
+
+      // 3. 캡처 기능
+      captureBtn.addEventListener('click', () => {
+        const videos = Array.from(document.querySelectorAll('video'));
+        const camVid = videos.find(v => v.id !== 'char-video-idle' && v.id !== 'char-video-touch');
+
+        if (!camVid || camVid.readyState < 2) {
+          alert('카메라가 아직 준비되지 않았습니다.');
+          return;
+        }
+
+        const w = window.innerWidth, h = window.innerHeight;
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+
+        // 카메라 영상 비율 맞추어 그리기
+        const scale = Math.max(w / camVid.videoWidth, h / camVid.videoHeight);
+        const dw = camVid.videoWidth * scale, dh = camVid.videoHeight * scale;
+        ctx.drawImage(camVid, (w - dw) / 2, (h - dh) / 2, dw, dh);
+
+        // 캐릭터 합성
+        if (isLocked && videoContainer.style.display !== 'none') {
+          const activeVid = isInteracting ? videoTouch : videoIdle;
+          const rect = videoContainer.getBoundingClientRect();
+          if (activeVid.videoWidth > 0) {
+            const r = Math.
